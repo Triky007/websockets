@@ -4,6 +4,15 @@ import asyncio
 import json
 import logging
 import websockets
+from dotenv import load_dotenv
+
+# --- Cargar Variables desde .env ---
+load_dotenv()  # Carga las variables desde el archivo .env
+
+# --- Configuración General ---
+SERVER_URL = os.getenv("SERVER_URL", "https://ws.triky.app")
+WS_SERVER_URL = os.getenv("WS_SERVER_URL", "wss://ws.triky.app/ws")
+API_KEY = os.getenv("API_KEY", "your-secret-api-key")
 
 # --- Configuración de Logging ---
 logging.basicConfig(
@@ -12,10 +21,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# --- Configuración General ---
-SERVER_URL = os.getenv("SERVER_URL", "http://public-server:8000")
-WS_SERVER_URL = os.getenv("WS_SERVER_URL", "ws://public-server:8000/ws")
-API_KEY = os.getenv("API_KEY", "your-secret-api-key")
+logger.info(f"SERVER_URL: {SERVER_URL}")
+logger.info(f"WS_SERVER_URL: {WS_SERVER_URL}")
+logger.info(f"API_KEY: {API_KEY}")
 
 class DownloadAgent:
     def __init__(self):

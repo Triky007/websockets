@@ -2,7 +2,7 @@ let ws;
 const statusMap = new Map();
 
 function connectWebSocket() {
-    ws = new WebSocket(`ws://${window.location.host}/ws`);
+    ws = new WebSocket(`wss://${window.location.host}/ws`);
     
     ws.onmessage = function(event) {
         const data = JSON.parse(event.data);
