@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  public-server:
+    build: .
+    container_name: public-server
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./files:/app/files
+    env_file:
+      - .env
+    restart: unless-stopped
+

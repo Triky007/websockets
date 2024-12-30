@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  private-agent:
+    build: .
+    container_name: private-agent
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./files:/app/files
+    env_file:
+      - .env
+    restart: unless-stopped
