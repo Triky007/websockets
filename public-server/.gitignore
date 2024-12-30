@@ -1,0 +1,22 @@
+# Archivos de configuración local
+.env
+__pycache__/
+*.pyc
+
+# Logs y datos temporales
+*.log
+*.pid
+*.sock
+tmp/
+
+# Archivos específicos de Docker
+docker-compose.override.yml
+
+# Dependencias
+*.db
+*.sqlite3
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+files/
