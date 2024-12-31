@@ -47,20 +47,23 @@ async function deleteFile(fileName) {
 
     try {
         const response = await fetch(`/files/${fileName}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
         });
-        const data = await response.json();
-
-        if (response.ok) {
-            alert(`File "${fileName}" deleted successfully`);
-            loadFiles(); // Refresh the file list
-        } else {
-            console.error('Error deleting file:', data.detail);
-            alert('Failed to delete file');
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+            throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
         }
+        
+        const data = await response.json();
+        alert(`File "${fileName}" deleted successfully`);
+        loadFiles(); // Refresh the file list
     } catch (error) {
         console.error('Error deleting file:', error);
-        alert('Error deleting file');
+        alert('Error deleting file: ' + error.message);
     }
 }
 

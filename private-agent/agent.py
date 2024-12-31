@@ -180,7 +180,7 @@ app = FastAPI()
 
 # Montar archivos estáticos y templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
-app.mount("/files", StaticFiles(directory="files"), name="files")
+app.mount("/downloaded", StaticFiles(directory="files"), name="files")  # Cambiado de /files a /downloaded
 templates = Jinja2Templates(directory="templates")
 
 @app.on_event("startup")
@@ -204,7 +204,7 @@ async def download_file(file_name: str):
     await agent.download_file(file_name)
     return {"status": "Download started"}
 
-@app.delete("/files/{file_name}")
+@app.delete("/files/{file_name}")  # Este endpoint ahora funcionará
 async def delete_file(file_name: str):
     try:
         file_path = os.path.join("files", file_name)
