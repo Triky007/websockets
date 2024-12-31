@@ -1,122 +1,165 @@
-⚙️ 1. Servidor Público (public-server)
-🛠️ Descripción General
-El Servidor Público es el núcleo central del sistema. Actúa como intermediario entre los usuarios (a través de una interfaz web) y el Agente Privado, estableciendo comunicación en tiempo real mediante WebSocket. Facilita el acceso seguro a los archivos mediante autenticación con API Key y ahora está optimizado para su despliegue en contenedores Docker.
+# Resumen Final del Proyecto WebSocket
 
-📄 Funciones Principales:
+## Estructura del Proyecto
 
-Gestión de WebSocket: Conexión robusta con el agente privado, mejorando el manejo de desconexiones y reintentos.
-Envío de Comandos al Agente: Comandos como download:{file_name} y list-files.
-Gestión de Archivos: Acceso seguro a los archivos mediante el endpoint /secure-file.
-Interfaz Web del Servidor: Listar archivos, iniciar descargas y ver estados en tiempo real.
-Dockerización: Configurado para desplegarse de forma eficiente en contenedores Docker.
-Logs Mejorados: Monitoreo claro de eventos críticos y errores.
-📂 Estructura de Archivos:
-
-plaintext
-Copiar código
-public-server/
+```
+websockets/
+├── docker-compose.yml          # Composición de contenedores principal
+├── README.md                   # Documentación principal
+├── resumen final.txt          # Resumen del proyecto
 │
-├── main.py            # Lógica principal del servidor
-├── /templates         # Plantillas HTML
-│   ├── index.html     # Página principal
-├── /static            # Archivos estáticos (JS, CSS)
-│   ├── script.js      # Lógica frontend
-├── /files             # Archivos descargables protegidos
-├── requirements.txt   # Dependencias del proyecto
-├── Dockerfile         # Configuración Docker
-├── .env              # Variables de entorno (API Key, configuración)
-├── uvicorn.log        # Logs del servidor
-🌐 Endpoints Clave:
-
-Ruta	Método	Descripción	Autenticación
-/	GET	Carga la página principal	❌ No
-/ws	WebSocket	Comunicación con el agente	❌ No
-/list-files	GET	Lista archivos disponibles	❌ No
-/start-download/{file_name}	POST	Inicia la descarga de un archivo	❌ No
-/secure-file/{file_name}	GET	Descarga segura de archivos	✅ API Key
-🤝 Relación con el Agente Privado:
-
-Comunicación en Tiempo Real: WebSocket para enviar comandos y recibir confirmaciones.
-Envío de Archivos Protegidos: Endpoint /secure-file/{file_name} autenticado con API Key.
-Confirmación de Descargas: El servidor recibe confirmaciones después de completar cada descarga.
-Manejo de Estados en Tiempo Real: Actualización dinámica en la interfaz web con el estado done.
-🖥️ Interfaz Web del Servidor:
-Tecnología: HTML + JavaScript + CSS
-Funciones:
-
-Listar archivos disponibles en /files.
-Iniciar la descarga de archivos seleccionados.
-Visualizar estados en tiempo real mediante mensajes WebSocket.
-Indicador de conexión WebSocket en tiempo real.
-🔄 Flujo de Trabajo:
-
-El usuario selecciona un archivo desde la interfaz web.
-El servidor envía el comando download:{file_name} al agente mediante WebSocket.
-El agente descarga el archivo protegido mediante /secure-file/{file_name}.
-El agente confirma la descarga con download_complete.
-El servidor actualiza el estado en la interfaz web (done).
-🤖 2. Agente Privado (private-agent)
-🛠️ Descripción General
-El Agente Privado mantiene una conexión constante con el Servidor Público a través de WebSocket. Se encarga de ejecutar instrucciones como descargar archivos protegidos, listar archivos locales y confirmar operaciones completadas. Ahora, también permite eliminar archivos locales y está optimizado para ejecutarse en contenedores Docker.
-
-📄 Funciones Principales:
-
-Conexión con el Servidor: WebSocket con reintentos controlados.
-Recepción de Comandos: download:{file_name} y list-files.
-Descarga Segura de Archivos: Mediante /secure-file con autenticación por API Key.
-Confirmación de Descargas: Mensaje al servidor con download_complete.
-Listar Archivos Locales: Muestra los archivos descargados.
-Eliminar Archivos Locales: Nuevo endpoint /delete/{file_name} para borrar archivos específicos.
-Dockerización: Configurado para ser desplegado en contenedores Docker.
-Logs Mejorados: Seguimiento claro de eventos críticos.
-📂 Estructura de Archivos:
-
-plaintext
-Copiar código
-private-agent/
+├── public-server/             # Servidor público (Puerto 8000)
+│   ├── main.py               # Punto de entrada y lógica principal
+│   ├── auth.py              # Sistema de autenticación
+│   ├── models.py            # Modelos de base de datos
+│   ├── database.py          # Configuración de base de datos
+│   ├── create_admin.py      # Script para crear usuario admin
+│   ├── requirements.txt     # Dependencias Python
+│   ├── Dockerfile          # Configuración de contenedor
+│   ├── docker-compose.yml  # Configuración de servicios
+│   ├── .env               # Variables de entorno (producción)
+│   ├── .env.template      # Plantilla de variables de entorno
+│   ├── files/            # Directorio de archivos
+│   ├── static/           # Archivos estáticos
+│   └── templates/        # Plantillas HTML
+│       ├── index.html    # Página principal
+│       ├── login.html    # Página de login
+│       └── dashboard.html # Dashboard de usuario
 │
-├── agent.py           # Lógica principal del agente
-├── /templates         # Plantillas HTML
-│   ├── index.html     # Página principal
-├── /static            # Archivos estáticos (JS, CSS)
-│   ├── script.js      # Lógica frontend
-│   ├── style.css      # Estilos frontend
-├── /files             # Archivos descargados
-├── requirements.txt   # Dependencias del agente
-├── Dockerfile         # Configuración Docker
-├── .env              # Variables de entorno (API Key, configuración)
-🌐 Endpoints Clave:
+└── private-agent/            # Agente privado (Puerto 8001)
+    ├── agent.py            # Lógica del agente y servidor web
+    ├── requirements.txt    # Dependencias Python
+    ├── Dockerfile         # Configuración de contenedor
+    ├── docker-compose.yml # Configuración de servicios
+    ├── .env              # Variables de entorno (producción)
+    ├── .env.template     # Plantilla de variables de entorno
+    ├── files/           # Archivos descargados
+    ├── static/          # Archivos estáticos
+    │   └── script.js    # JavaScript del cliente
+    └── templates/       # Plantillas HTML
+        └── index.html   # Dashboard del agente
+```
 
-Ruta	Método	Descripción	Autenticación
-/	GET	Página principal	❌ No
-/list-files	GET	Lista archivos locales	❌ No
-/download/{file_name}	GET	Descargar archivos locales	❌ No
-/delete/{file_name}	DELETE	Eliminar un archivo local	❌ No
-🤝 Relación con el Servidor Público:
+## Descripción de Componentes Principales
 
-Recepción de Comandos: Manejo de comandos download:{file_name}.
-Descarga Segura: Descarga archivos protegidos desde /secure-file/{file_name}.
-Confirmación de Operaciones: Informa al servidor con download_complete.
-Monitoreo en Tiempo Real: Actualización de estados en la interfaz web.
-🖥️ Interfaz Web del Agente:
-Tecnología: HTML + JavaScript + CSS
-Funciones:
+### Servidor Público
+- `main.py`: Servidor FastAPI con endpoints HTTP y WebSocket
+- `auth.py`: Sistema de autenticación JWT con cookies
+- `models.py`: Modelos SQLAlchemy para usuarios
+- `database.py`: Configuración de SQLite
+- `create_admin.py`: Utilidad para crear usuario administrador
 
-Listar archivos locales.
-Descargar archivos almacenados.
-Eliminar archivos con un botón específico.
-Mostrar el estado de conexión en tiempo real.
-🔄 Flujo de Trabajo:
+### Agente Privado
+- `agent.py`: Cliente WebSocket y servidor web FastAPI
+- `static/script.js`: Lógica del cliente para gestión de archivos
+- `templates/index.html`: Interfaz de usuario del agente
 
-El agente se conecta al servidor mediante WebSocket.
-Recibe comandos para descargar o listar archivos.
-Descarga archivos protegidos usando la API Key.
-Confirma la descarga al servidor.
-Los archivos descargados aparecen en la interfaz web.
-El usuario puede eliminar archivos desde la interfaz.
-🔑 Tecnologías Comunes:
-Backend: FastAPI, Python, WebSockets
-Frontend: HTML, JavaScript, CSS
-Seguridad: API Key para endpoints protegidos
-Contenedores: Docker para despliegue eficiente
-Comunicación: WebSocket para interacción en tiempo real
+### Archivos de Configuración
+- `.env`: Variables de entorno específicas
+- `docker-compose.yml`: Configuración de contenedores
+- `requirements.txt`: Dependencias Python
+
+### Directorios de Datos
+- `files/`: Almacenamiento de archivos
+- `static/`: Recursos web estáticos
+- `templates/`: Plantillas HTML
+
+## Arquitectura del Sistema
+- **Servidor Público** (puerto 8000):
+  - Gestiona la autenticación de usuarios
+  - Proporciona endpoints para la interfaz web
+  - Maneja conexiones WebSocket con agentes privados
+  - Almacena archivos y gestiona descargas
+
+- **Agente Privado** (puerto 8001):
+  - Se conecta al servidor mediante WebSocket autenticado
+  - Proporciona una interfaz web para gestionar archivos
+  - Maneja descargas y almacenamiento local de archivos
+
+## Características Implementadas
+
+### 1. Sistema de Autenticación
+- Implementado sistema JWT con cookies httpOnly
+- Token almacenado de forma segura en cookies
+- Validación de token en conexiones WebSocket
+- Manejo de roles de usuario (admin, user)
+
+### 2. Conexión WebSocket Segura
+- Autenticación mediante cookies en lugar de query parameters
+- Manejo correcto del formato "Bearer token"
+- Logging detallado para debugging
+- Reconexión automática en caso de desconexión
+
+### 3. Interfaz de Usuario
+#### Servidor Público
+- Página de login
+- Dashboard principal
+- Lista de archivos disponibles
+- Sistema de descarga de archivos
+
+#### Agente Privado
+- Dashboard con estado de conexión
+- Lista de archivos descargados
+- Funcionalidad de descarga y eliminación de archivos
+- Indicador de estado de conexión en tiempo real
+
+## Últimas Mejoras Implementadas
+
+### 1. Corrección de Autenticación WebSocket
+- Solucionado problema con formato de token en cookies
+- Eliminadas comillas extra del valor del token
+- Mejorado el logging para debugging
+
+### 2. Mejoras en el Agente Privado
+- Restaurado soporte de templates y archivos estáticos
+- Mejorada la interfaz de usuario
+- Actualizado el manejo de archivos
+- Implementada funcionalidad de descarga asíncrona
+
+### 3. Mejoras en la Interfaz de Usuario
+- Añadido botón de refresh explícito
+- Mejorado el manejo de errores
+- Actualizada la UI para mejor experiencia de usuario
+- Implementadas confirmaciones de acciones
+
+## Configuración del Sistema
+
+### Variables de Entorno
+- SERVER_URL=http://localhost:8000
+- WS_SERVER_URL=ws://localhost:8000/ws
+- API_KEY=[your-secret-key]
+
+### Puertos
+- Servidor Público: 8000
+- Agente Privado: 8001
+
+## Instrucciones de Uso
+
+1. Iniciar el Servidor Público:
+   ```bash
+   cd public-server
+   python main.py
+   ```
+
+2. Iniciar el Agente Privado:
+   ```bash
+   cd private-agent
+   python agent.py
+   ```
+
+3. Acceder a las interfaces:
+   - Servidor Público: http://localhost:8000
+   - Agente Privado: http://localhost:8001
+
+## Seguridad
+- Tokens JWT almacenados en cookies httpOnly
+- Validación de tokens en todas las conexiones
+- Manejo seguro de archivos
+- Protección contra accesos no autorizados
+
+## Próximos Pasos Recomendados
+1. Implementar HTTPS para mayor seguridad
+2. Añadir más validaciones de archivos
+3. Implementar sistema de logs más robusto
+4. Añadir tests automatizados
+5. Mejorar el manejo de errores de red

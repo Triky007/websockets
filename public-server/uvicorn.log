@@ -7,3 +7,61 @@
 2024-12-30 01:20:16,365 - __main__ - ERROR - WebSocket error: 1001
 2024-12-30 01:31:05,231 - __main__ - ERROR - WebSocket error: 1000
 2024-12-30 01:31:07,304 - __main__ - ERROR - WebSocket error: 1012
+2024-12-31 09:41:27,621 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\Juan\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2024-12-31 09:48:40,995 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\Juan\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2024-12-31 09:50:33,272 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\Juan\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2024-12-31 09:53:38,412 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\Juan\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2024-12-31 09:55:48,169 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\Juan\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2024-12-31 09:59:58,587 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\Juan\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2024-12-31 09:59:58,881 - auth - INFO - Created token for user: admin@example.com
+2024-12-31 09:59:58,890 - auth - INFO - Authorization header: None
+2024-12-31 09:59:58,890 - auth - WARNING - No Authorization header found
+2024-12-31 09:59:58,891 - auth - INFO - Attempting to get current user
+2024-12-31 09:59:58,891 - auth - WARNING - No token provided
+2024-12-31 09:59:58,891 - auth - INFO - Checking if user is active
+2024-12-31 09:59:58,891 - auth - WARNING - No current user
+2024-12-31 10:02:15,457 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\Juan\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2024-12-31 10:02:15,762 - auth - INFO - Created token for user: admin@example.com
+2024-12-31 10:02:15,782 - auth - INFO - Authorization header: None
+2024-12-31 10:02:15,782 - auth - WARNING - No Authorization header found
+2024-12-31 10:02:15,782 - __main__ - WARNING - No token provided for dashboard access
+2024-12-31 10:02:15,782 - __main__ - ERROR - Error in dashboard access: 
+2024-12-31 10:03:38,114 - auth - INFO - Authorization header: None
+2024-12-31 10:03:38,114 - auth - WARNING - No Authorization header found
+2024-12-31 10:03:38,114 - __main__ - WARNING - No token provided for dashboard access
+2024-12-31 10:03:38,114 - __main__ - ERROR - Error in dashboard access: 

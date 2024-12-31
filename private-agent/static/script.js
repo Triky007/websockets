@@ -12,7 +12,7 @@ async function loadFiles() {
             item.innerHTML = `
                 <span>${file}</span>
                 <div>
-                    <a href="/download/${file}" class="btn btn-primary btn-sm me-2" download>Download</a>
+                    <button class="btn btn-primary btn-sm me-2" onclick="downloadFile('${file}')">Download</button>
                     <button class="btn btn-danger btn-sm" onclick="deleteFile('${file}')">Delete</button>
                 </div>
             `;
@@ -23,11 +23,30 @@ async function loadFiles() {
     }
 }
 
+async function downloadFile(fileName) {
+    try {
+        const response = await fetch(`/download/${fileName}`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+            alert(`Download of "${fileName}" started`);
+        } else {
+            console.error('Error starting download:', data.detail);
+            alert('Failed to start download');
+        }
+    } catch (error) {
+        console.error('Error starting download:', error);
+        alert('Error starting download');
+    }
+}
+
 async function deleteFile(fileName) {
     if (!confirm(`Are you sure you want to delete "${fileName}"?`)) return;
 
     try {
-        const response = await fetch(`/delete/${fileName}`, {
+        const response = await fetch(`/files/${fileName}`, {
             method: 'DELETE'
         });
         const data = await response.json();
@@ -43,6 +62,10 @@ async function deleteFile(fileName) {
         console.error('Error deleting file:', error);
         alert('Error deleting file');
     }
+}
+
+function refreshFiles() {
+    loadFiles();
 }
 
 // Initialize
