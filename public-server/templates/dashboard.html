@@ -29,7 +29,7 @@
                         <button class="btn btn-primary btn-sm" onclick="refreshFiles()">
                             <i class="bi bi-arrow-clockwise"></i> Refresh
                         </button>
-                        <form action="/upload" method="post" enctype="multipart/form-data" class="d-inline">
+                        <form action="/upload_files" method="post" enctype="multipart/form-data" class="d-inline">
                             <input type="file" name="file" id="file" class="d-none" onchange="this.form.submit()">
                             <button type="button" class="btn btn-success btn-sm" onclick="document.getElementById('file').click()">
                                 <i class="bi bi-upload"></i> Upload
@@ -51,9 +51,18 @@
 async function refreshFiles() {
     try {
         const response = await fetch('/list-files');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         const data = await response.json();
         const fileList = document.getElementById('fileList');
         fileList.innerHTML = '';
+
+        // Verificar que data y data.files existen
+        if (!data || !data.files) {
+            fileList.innerHTML = '<div class="list-group-item">Error loading files</div>';
+            return;
+        }
 
         if (data.files.length === 0) {
             fileList.innerHTML = '<div class="list-group-item">No files uploaded yet</div>';
@@ -78,6 +87,8 @@ async function refreshFiles() {
         });
     } catch (error) {
         console.error('Error loading files:', error);
+        const fileList = document.getElementById('fileList');
+        fileList.innerHTML = '<div class="list-group-item text-danger">Error loading files: ' + error.message + '</div>';
     }
 }
 

@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}XMF Devices{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">XMF Devices</h5>
+                    <div>
+                        <span id="connectionStatus" class="badge bg-secondary me-2">Checking connection...</span>
+                        <button id="getDevices" class="btn btn-primary">
+                            <span class="normal-text">
+                                <i class="bi bi-arrow-repeat"></i> Get Known Devices
+                            </span>
+                            <span class="loading d-none">
+                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                Loading...
+                            </span>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Error message -->
+                    <div id="errorMessage" class="alert alert-danger d-none" role="alert">
+                    </div>
+                    
+                    <!-- XML Response -->
+                    <div id="xmlResponse" class="d-none">
+                        <h6>Known Devices:</h6>
+                        <pre id="xmlContent" class="bg-light p-3 rounded" style="max-height: 500px; overflow-y: auto;">
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let ws = null;
+
+function updateAgentStatus(connected) {
+    const statusBadge = document.getElementById('connectionStatus');
+    const button = document.getElementById('getDevices');
+    
+    if (connected) {
+        statusBadge.className = 'badge bg-success me-2';
+        statusBadge.textContent = 'Connected';
+        button.disabled = false;
+    } else {
+        statusBadge.className = 'badge bg-danger me-2';
+        statusBadge.textContent = 'Disconnected';
+        button.disabled = true;
+    }
+}
+
+function formatXML(xmlString) {
+    // Crear un objeto XML desde el string
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
+    
+    // Función recursiva para construir una representación más amigable
+    function processNode(node, indent = 0) {
+        let result = '';
+        const padding = ' '.repeat(indent * 2);
+        
+        if (node.nodeType === 1) { // Elemento
+            result += `${padding}<${node.nodeName}`;
+            
+            // Añadir atributos
+            for (let attr of node.attributes) {
+                result += ` ${attr.name}="${attr.value}"`;
+            }
+            
+            if (node.childNodes.length === 0) {
+                result += '/>\n';
+            } else {
+                result += '>\n';
+                
+                // Procesar nodos hijos
+                for (let child of node.childNodes) {
+                    result += processNode(child, indent + 1);
+                }
+                
+                result += `${padding}</${node.nodeName}>\n`;
+            }
+        } else if (node.nodeType === 3) { // Texto
+            const text = node.textContent.trim();
+            if (text) {
+                result += `${padding}${text}\n`;
+            }
+        }
+        
+        return result;
+    }
+    
+    // Procesar el documento completo
+    return processNode(xmlDoc.documentElement);
+}
+
+function connectWebSocket() {
+    ws = new WebSocket(`ws://${window.location.host}/ws`);
+    
+    ws.onopen = () => {
+        // Al conectar, preguntar por el estado del agente
+        ws.send(JSON.stringify({
+            type: 'command',
+            command: 'ping'
+        }));
+    };
+    
+    ws.onclose = () => {
+        updateAgentStatus(false);
+        // Intentar reconectar en 5 segundos
+        setTimeout(connectWebSocket, 5000);
+    };
+    
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log('WebSocket message:', data);
+        
+        if (data.type === 'agent_status') {
+            updateAgentStatus(data.connected);
+        } else if (data.type === 'error') {
+            updateAgentStatus(false);
+            const errorMessage = document.getElementById('errorMessage');
+            errorMessage.textContent = data.message;
+            errorMessage.classList.remove('d-none');
+        } else if (data.type === 'response' && data.command === 'get_know_devices') {
+            const button = document.getElementById('getDevices');
+            const xmlResponse = document.getElementById('xmlResponse');
+            const xmlContent = document.getElementById('xmlContent');
+            const errorMessage = document.getElementById('errorMessage');
+            
+            // Reset loading state
+            button.disabled = false;
+            button.querySelector('.normal-text').classList.remove('d-none');
+            button.querySelector('.loading').classList.add('d-none');
+            
+            if (data.status === 'error') {
+                errorMessage.textContent = data.message;
+                errorMessage.classList.remove('d-none');
+                xmlResponse.classList.add('d-none');
+            } else {
+                try {
+                    // Formatear XML para mejor visualización
+                    const formattedXml = formatXML(data.data);
+                    xmlContent.textContent = formattedXml;
+                    xmlResponse.classList.remove('d-none');
+                    errorMessage.classList.add('d-none');
+                } catch (e) {
+                    errorMessage.textContent = 'Error formatting XML response';
+                    errorMessage.classList.remove('d-none');
+                    xmlResponse.classList.add('d-none');
+                }
+            }
+        }
+    };
+}
+
+document.getElementById('getDevices').addEventListener('click', async function() {
+    const button = this;
+    const xmlResponse = document.getElementById('xmlResponse');
+    const errorMessage = document.getElementById('errorMessage');
+    
+    // Set loading state
+    button.disabled = true;
+    button.querySelector('.normal-text').classList.add('d-none');
+    button.querySelector('.loading').classList.remove('d-none');
+    xmlResponse.classList.add('d-none');
+    errorMessage.classList.add('d-none');
+    
+    // Enviar comando al agente
+    ws.send(JSON.stringify({
+        type: 'command',
+        command: 'get_know_devices'
+    }));
+});
+
+// Conectar WebSocket al cargar la página
+connectWebSocket();
+</script>
+{% endblock %}

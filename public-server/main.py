@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, HTTPException, Depends, Header, status, Request, Response, Query
+from fastapi import FastAPI, WebSocket, HTTPException, Depends, Header, status, Request, Response, Query, File, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -19,6 +19,7 @@ from database import SessionLocal, engine, Base
 from dotenv import load_dotenv
 from fastapi.security import OAuth2PasswordRequestForm
 import base64
+from starlette.websockets import WebSocketDisconnect
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -252,6 +253,7 @@ async def delete_user(
 
 @app.get("/list-files")
 async def list_files(request: Request, db: Session = Depends(database.get_db)):
+    """Lista los archivos en el directorio files"""
     try:
         logger.info("Listing files...")
         current_user = await auth.get_current_user(request, db)
@@ -265,17 +267,24 @@ async def list_files(request: Request, db: Session = Depends(database.get_db)):
             
         logger.info(f"User {current_user.email} requesting file list")
         
-        # Usar ruta absoluta
-        files_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "files")
-        logger.info(f"Files directory: {files_dir}")
-        
-        if not os.path.exists(files_dir):
-            logger.warning(f"Files directory does not exist: {files_dir}")
+        # Asegurar que el directorio existe
+        if not os.path.exists(FILES_DIR):
+            os.makedirs(FILES_DIR)
+            logger.info(f"Created files directory: {FILES_DIR}")
             return {"files": []}
             
-        files = [f for f in os.listdir(files_dir) if os.path.isfile(os.path.join(files_dir, f))]
-        logger.info(f"Found {len(files)} files: {files}")
-        return {"files": files}
+        # Listar archivos
+        try:
+            files = [f for f in os.listdir(FILES_DIR) if os.path.isfile(os.path.join(FILES_DIR, f))]
+            logger.info(f"Found {len(files)} files: {files}")
+            return {"files": files}
+        except Exception as e:
+            logger.error(f"Error reading directory: {str(e)}")
+            return {"files": [], "error": str(e)}
+            
+    except HTTPException as e:
+        logger.error(f"HTTP error listing files: {str(e)}")
+        raise e
     except Exception as e:
         logger.error(f"Error listing files: {str(e)}")
         raise HTTPException(
@@ -364,6 +373,18 @@ async def agent_files_page(
         "user": current_user
     })
 
+@app.get("/xmf")
+async def xmf_page(request: Request, db: Session = Depends(database.get_db)):
+    """Página para interactuar con el servidor XMF a través del agente"""
+    current_user = await auth.get_current_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login")
+    return templates.TemplateResponse("xmf.html", {
+        "request": request,
+        "user": current_user,
+        "active_page": "xmf"
+    })
+
 FILES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "files")
 
 @app.post("/download/{filename}")
@@ -410,8 +431,103 @@ async def download_file(filename: str, request: Request, db: Session = Depends(d
         logger.error(f"❌ Error en descarga: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/upload_files")
+async def upload_files(
+    request: Request, 
+    file: UploadFile = File(..., description="File to upload", max_size=100 * 1024 * 1024),  # 100MB límite
+    db: Session = Depends(database.get_db)
+):
+    """Sube un archivo al servidor"""
+    try:
+        current_user = await auth.get_current_user(request, db)
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+            
+        # Asegurar que el directorio existe
+        if not os.path.exists(FILES_DIR):
+            os.makedirs(FILES_DIR)
+        
+        # Verificar el tamaño del archivo
+        file_size = 0
+        content = bytearray()
+        
+        # Leer el archivo en chunks para manejar archivos grandes
+        chunk_size = 1024 * 1024  # 1MB chunks
+        async for chunk in file.stream():
+            content.extend(chunk)
+            file_size += len(chunk)
+            if file_size > 100 * 1024 * 1024:  # 100MB límite
+                raise HTTPException(
+                    status_code=413,
+                    detail="File too large. Maximum size allowed is 100MB"
+                )
+        
+        # Guardar el archivo en el directorio files del servidor
+        file_path = os.path.join(FILES_DIR, file.filename)
+        with open(file_path, "wb") as f:
+            f.write(content)
+            
+        logger.info(f"✅ Archivo subido: {file.filename} ({file_size / 1024 / 1024:.2f}MB)")
+        
+        # Verificar si la petición espera JSON o HTML
+        accept = request.headers.get("accept", "")
+        if "application/json" in accept:
+            return {"status": "success", "message": "File uploaded successfully"}
+        else:
+            return RedirectResponse(url="/dashboard", status_code=303)
+        
+    except HTTPException as e:
+        logger.error(f"❌ Error subiendo archivo: {str(e)}")
+        raise e
+    except Exception as e:
+        logger.error(f"❌ Error subiendo archivo: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/delete_files/{filename}")
+async def delete_files(filename: str, request: Request, db: Session = Depends(database.get_db)):
+    """Elimina un archivo del servidor"""
+    try:
+        current_user = await auth.get_current_user(request, db)
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+            
+        file_path = os.path.join(FILES_DIR, filename)
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="File not found")
+            
+        os.remove(file_path)
+        logger.info(f"✅ Archivo eliminado: {filename}")
+        return {"status": "success", "message": "File deleted successfully"}
+        
+    except Exception as e:
+        logger.error(f"❌ Error eliminando archivo: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Lista de conexiones WebSocket de clientes web
 connected_clients = set()
+
+async def send_websocket_message(websocket: WebSocket, message: dict, remove_from: set = None):
+    """Envía un mensaje por WebSocket de forma segura"""
+    try:
+        # Convertir el mensaje a JSON y verificar su tamaño
+        message_str = json.dumps(message)
+        if len(message_str) > 1024 * 1024:  # 1MB límite
+            logger.warning(f"❌ Mensaje demasiado grande ({len(message_str)} bytes)")
+            # Enviar solo un resumen del mensaje
+            summary = {
+                "type": message.get("type", "unknown"),
+                "status": message.get("status", "error"),
+                "message": "Message too large to send"
+            }
+            await websocket.send_json(summary)
+        else:
+            await websocket.send_json(message)
+        return True
+    except Exception as e:
+        logger.error(f"❌ Error enviando mensaje por WebSocket: {str(e)}")
+        if remove_from and websocket in remove_from:
+            remove_from.remove(websocket)
+        return False
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -422,7 +538,7 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info("✅ Cliente web conectado")
         
         # Enviar estado inicial del agente
-        await websocket.send_json({
+        await send_websocket_message(websocket, {
             "type": "agent_status",
             "connected": len(connected_agents) > 0
         })
@@ -436,25 +552,21 @@ async def websocket_endpoint(websocket: WebSocket):
                 # Reenviar comando a todos los agentes conectados
                 if not connected_agents:
                     logger.info("❌ No hay agentes conectados")
-                    await websocket.send_json({
+                    await send_websocket_message(websocket, {
                         "type": "error",
                         "message": "No hay agentes conectados"
                     })
                     continue
                 
                 success = False
-                for agent in connected_agents:
-                    try:
-                        await agent.send_json(data)
+                for agent in list(connected_agents):  # Usar una copia para evitar modificar durante la iteración
+                    if await send_websocket_message(agent, data, connected_agents):
                         success = True
                         logger.info("✅ Comando enviado al agente")
-                    except Exception as e:
-                        logger.error(f"❌ Error enviando comando al agente: {str(e)}")
-                        continue
                 
                 if not success:
                     logger.error("❌ No se pudo enviar el comando a ningún agente")
-                    await websocket.send_json({
+                    await send_websocket_message(websocket, {
                         "type": "error",
                         "message": "No se pudo enviar el comando a ningún agente"
                     })
@@ -462,15 +574,16 @@ async def websocket_endpoint(websocket: WebSocket):
         except WebSocketDisconnect:
             logger.info("❌ Cliente web desconectado")
         finally:
-            connected_clients.remove(websocket)
+            if websocket in connected_clients:
+                connected_clients.remove(websocket)
     except Exception as e:
         logger.error(f"❌ Error en WebSocket de cliente web: {str(e)}")
         if websocket in connected_clients:
             connected_clients.remove(websocket)
 
-# WebSocket para el agente
 @app.websocket("/ws/agent")
 async def agent_websocket(websocket: WebSocket):
+    """WebSocket para el agente"""
     try:
         await websocket.accept()
         connected_agents.add(websocket)
@@ -482,23 +595,19 @@ async def agent_websocket(websocket: WebSocket):
                 logger.info(f"📥 Mensaje del agente: {data}")
                 
                 # Reenviar respuesta a todos los clientes web conectados
-                for client in connected_clients:
-                    try:
-                        await client.send_json(data)
-                    except Exception as e:
-                        logger.error(f"❌ Error enviando respuesta al cliente: {str(e)}")
-                        continue
+                for client in list(connected_clients):  # Usar una copia para evitar modificar durante la iteración
+                    await send_websocket_message(client, data, connected_clients)
                 
-                await websocket.send_json({"status": "ok", "message": "Mensaje recibido"})
+                await send_websocket_message(websocket, {"status": "ok", "message": "Mensaje recibido"})
         except WebSocketDisconnect:
             logger.info("❌ Agente desconectado")
         finally:
-            connected_agents.remove(websocket)
+            if websocket in connected_agents:
+                connected_agents.remove(websocket)
     except Exception as e:
         logger.error(f"❌ Error en WebSocket del agente: {str(e)}")
         if websocket in connected_agents:
             connected_agents.remove(websocket)
-        await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
 
 # Almacenar agentes conectados
 connected_agents = set()

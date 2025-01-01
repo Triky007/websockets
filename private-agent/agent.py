@@ -4,11 +4,14 @@ import base64
 import asyncio
 import logging
 import websockets
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
+import httpx
+from datetime import datetime
+import xml.etree.ElementTree as ET
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -20,6 +23,7 @@ load_dotenv()
 # Configuración
 WEBSOCKET_URL = os.getenv("WEBSOCKET_URL", "ws://localhost:8000")
 FILES_DIR = os.path.join(os.path.dirname(__file__), "files")
+XMF_SERVER = "http://192.168.10.110:25000"
 
 # Crear directorio de archivos si no existe
 os.makedirs(FILES_DIR, exist_ok=True)
@@ -172,6 +176,33 @@ class AgentWebSocket:
                     "message": f"Error deleting file: {str(e)}"
                 }
         
+        elif command == "get_know_devices":
+            try:
+                # Hacer la petición al servidor XMF
+                async with httpx.AsyncClient() as client:
+                    response = await client.post('http://localhost:8001/api/getKnowDevices')
+                    if response.status_code == 200:
+                        return {
+                            "type": "response",
+                            "status": "ok",
+                            "command": command,
+                            "data": response.text
+                        }
+                    else:
+                        return {
+                            "type": "response",
+                            "status": "error",
+                            "command": command,
+                            "message": f"Error del servidor XMF: {response.status_code}"
+                        }
+            except Exception as e:
+                return {
+                    "type": "response",
+                    "status": "error",
+                    "command": command,
+                    "message": f"Error al conectar con el servidor XMF: {str(e)}"
+                }
+        
         else:
             return {"type": "response", "status": "error", "message": "Comando desconocido"}
 
@@ -181,6 +212,11 @@ agent_ws = AgentWebSocket()
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
+
+@app.get("/xmf", response_class=HTMLResponse)
+async def xmf_page(request: Request):
+    """Página para interactuar con el servidor XMF"""
+    return templates.TemplateResponse("xmf.html", {"request": request})
 
 @app.get("/status")
 async def status():
@@ -220,6 +256,75 @@ async def delete_file(filename: str):
         return JSONResponse(
             status_code=500,
             content={"status": "error", "message": "Error deleting file"}
+        )
+
+@app.post("/api/getKnowDevices")
+async def get_know_devices():
+    """Endpoint para obtener KnowDevices del servidor XMF"""
+    try:
+        # Preparar el cuerpo XML
+        current_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        request_body = f"""<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<JMF xmlns="http://www.CIP4.org/JDFSchema_1_1"
+     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     SenderID="MIS_ID"
+     TimeStamp="{current_time}"
+     Version="1.3">
+  <Query Type="KnownDevices" ID="Q1"/>
+</JMF>""".strip()
+
+        # Configurar headers
+        headers = {
+            "Content-Type": "application/vnd.cip4-jmf+xml",
+            "Accept": "application/xml",
+            "User-Agent": "XMF Cyan"
+        }
+
+        # Realizar la solicitud al servidor XMF
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                XMF_SERVER,
+                content=request_body,
+                headers=headers,
+                timeout=30.0  # Timeout de 30 segundos
+            )
+
+        # Verificar si la respuesta es exitosa
+        response.raise_for_status()
+
+        # Validar que la respuesta es XML válido
+        try:
+            ET.fromstring(response.text)
+        except ET.ParseError as e:
+            logger.error(f"Error parsing XML response: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail="Invalid XML response from XMF server"
+            )
+
+        # Devolver el XML como respuesta
+        return Response(
+            content=response.text,
+            media_type="application/xml"
+        )
+
+    except httpx.RequestError as e:
+        logger.error(f"Error connecting to XMF server: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error connecting to XMF server: {str(e)}"
+        )
+    except httpx.HTTPStatusError as e:
+        logger.error(f"HTTP error from XMF server: {str(e)}")
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=f"XMF server error: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error in getKnowDevices: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}"
         )
 
 async def start_websocket():

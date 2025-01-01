@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}XMF Devices{% endblock %}
+
+{% block extra_head %}
+<style>
+    pre {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 5px;
+        white-space: pre-wrap;
+        max-height: 500px;
+        overflow-y: auto;
+    }
+    .xml-response {
+        display: none;
+    }
+    .loading {
+        display: none;
+    }
+    .loading.active {
+        display: inline-block;
+    }
+    .error-message {
+        color: #dc3545;
+        margin-top: 10px;
+        display: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">XMF Known Devices</h5>
+            </div>
+            <div class="card-body">
+                <button id="getDevices" class="btn btn-primary">
+                    <span class="normal-text">Get Known Devices</span>
+                    <span class="loading">
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        Loading...
+                    </span>
+                </button>
+                
+                <div id="errorMessage" class="error-message alert alert-danger mt-3"></div>
+                
+                <div id="xmlResponse" class="xml-response mt-3">
+                    <h6>Response:</h6>
+                    <pre id="xmlContent"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('getDevices').addEventListener('click', async function() {
+    const button = this;
+    const xmlResponse = document.getElementById('xmlResponse');
+    const xmlContent = document.getElementById('xmlContent');
+    const errorMessage = document.getElementById('errorMessage');
+    
+    // Reset UI
+    button.disabled = true;
+    button.querySelector('.normal-text').style.display = 'none';
+    button.querySelector('.loading').style.display = 'inline-block';
+    xmlResponse.style.display = 'none';
+    errorMessage.style.display = 'none';
+    
+    try {
+        const response = await fetch('/api/getKnowDevices', {
+            method: 'POST'
+        });
+        
+        const data = await response.text();
+        
+        if (!response.ok) {
+            throw new Error(data);
+        }
+        
+        // Formatear XML para mejor visualización
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(data, 'text/xml');
+        const serializer = new XMLSerializer();
+        const formattedXml = serializer.serializeToString(xmlDoc)
+            .replace(/></g, '>\n<')
+            .replace(/><\/\w+>/g, '>\n</$&')
+            .replace(/<\w+>/g, '\n$&');
+        
+        xmlContent.textContent = formattedXml;
+        xmlResponse.style.display = 'block';
+    } catch (error) {
+        errorMessage.textContent = `Error: ${error.message}`;
+        errorMessage.style.display = 'block';
+    } finally {
+        button.disabled = false;
+        button.querySelector('.normal-text').style.display = 'inline-block';
+        button.querySelector('.loading').style.display = 'none';
+    }
+});
+</script>
+{% endblock %}
