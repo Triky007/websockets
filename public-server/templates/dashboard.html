@@ -21,14 +21,11 @@
 <div class="container">
     <div class="row">
         <div class="col-md-12">
-            <div id="connectionStatus" class="connection-status">
-                <span class="badge bg-secondary">Checking connection...</span>
-            </div>
-
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <h4 class="mb-0">Files</h4>
+                    <h5 class="mb-0">Files</h5>
                     <div>
+                        <span id="connectionStatus" class="badge bg-secondary me-2">Checking connection...</span>
                         <button class="btn btn-primary btn-sm" onclick="refreshFiles()">
                             <i class="bi bi-arrow-clockwise"></i> Refresh
                         </button>
@@ -125,23 +122,65 @@ async function deleteFile(fileName) {
     }
 }
 
-// Load files immediately and every 5 seconds
-refreshFiles();
-setInterval(refreshFiles, 5000);
+let ws = null;
 
-// Check connection status periodically
-setInterval(() => {
-    fetch('/list-files')
-        .then(() => {
-            document.getElementById('connectionStatus').innerHTML = `
-                <span class="badge bg-success">Connected</span>
-            `;
-        })
-        .catch(() => {
-            document.getElementById('connectionStatus').innerHTML = `
-                <span class="badge bg-danger">Disconnected</span>
-            `;
-        });
-}, 5000);
+function updateAgentStatus(connected) {
+    const statusBadge = document.getElementById('connectionStatus');
+    if (connected) {
+        statusBadge.className = 'badge bg-success me-2';
+        statusBadge.textContent = 'Connected';
+    } else {
+        statusBadge.className = 'badge bg-danger me-2';
+        statusBadge.textContent = 'Disconnected';
+    }
+}
+
+function connectWebSocket() {
+    ws = new WebSocket(`ws://${window.location.host}/ws`);
+    
+    ws.onopen = () => {
+        // Al conectar, preguntar por el estado del agente
+        ws.send(JSON.stringify({
+            type: 'command',
+            command: 'ping'
+        }));
+    };
+    
+    ws.onclose = () => {
+        updateAgentStatus(false);
+        // Intentar reconectar en 5 segundos
+        setTimeout(connectWebSocket, 5000);
+    };
+    
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log('WebSocket message:', data); // Para debug
+        
+        if (data.type === 'agent_status') {
+            updateAgentStatus(data.connected);
+        } else if (data.type === 'error' && data.message === 'No hay agentes conectados') {
+            updateAgentStatus(false);
+        } else if (data.type === 'response' && data.status === 'ok') {
+            updateAgentStatus(true);
+        }
+    };
+}
+
+// Comprobar el estado del agente cada 10 segundos
+function checkAgentStatus() {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            type: 'command',
+            command: 'ping'
+        }));
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    connectWebSocket();
+    setInterval(checkAgentStatus, 10000);
+    refreshFiles();
+    setInterval(refreshFiles, 5000);
+});
 </script>
 {% endblock %}

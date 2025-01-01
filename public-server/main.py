@@ -421,6 +421,13 @@ async def websocket_endpoint(websocket: WebSocket):
         connected_clients.add(websocket)
         logger.info("✅ Cliente web conectado")
         
+        # Enviar estado inicial del agente
+        await websocket.send_json({
+            "type": "agent_status",
+            "connected": len(connected_agents) > 0
+        })
+        logger.info(f"📤 Estado inicial del agente enviado: {len(connected_agents) > 0}")
+        
         try:
             while True:
                 data = await websocket.receive_json()
@@ -428,6 +435,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 
                 # Reenviar comando a todos los agentes conectados
                 if not connected_agents:
+                    logger.info("❌ No hay agentes conectados")
                     await websocket.send_json({
                         "type": "error",
                         "message": "No hay agentes conectados"
@@ -439,11 +447,13 @@ async def websocket_endpoint(websocket: WebSocket):
                     try:
                         await agent.send_json(data)
                         success = True
+                        logger.info("✅ Comando enviado al agente")
                     except Exception as e:
                         logger.error(f"❌ Error enviando comando al agente: {str(e)}")
                         continue
                 
                 if not success:
+                    logger.error("❌ No se pudo enviar el comando a ningún agente")
                     await websocket.send_json({
                         "type": "error",
                         "message": "No se pudo enviar el comando a ningún agente"
