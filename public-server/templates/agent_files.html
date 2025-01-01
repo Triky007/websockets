@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}Agent Files{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">Agent Files</h4>
+                    <button class="btn btn-primary btn-sm" onclick="refreshAgentFiles()">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div id="agentStatus" class="alert alert-secondary mb-3">
+                        Checking agent connection...
+                    </div>
+                    <div id="fileList" class="list-group">
+                        <!-- Files will be listed here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let ws = null;
+
+function connectWebSocket() {
+    ws = new WebSocket(`ws://${window.location.host}/ws`);
+    
+    ws.onopen = () => {
+        document.getElementById('agentStatus').className = 'alert alert-success mb-3';
+        document.getElementById('agentStatus').textContent = 'Connected to agent';
+        refreshAgentFiles();
+    };
+    
+    ws.onclose = () => {
+        document.getElementById('agentStatus').className = 'alert alert-danger mb-3';
+        document.getElementById('agentStatus').textContent = 'Disconnected from agent';
+        // Intentar reconectar en 5 segundos
+        setTimeout(connectWebSocket, 5000);
+    };
+    
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'agent_files') {
+            updateFileList(data.files);
+        }
+    };
+}
+
+function updateFileList(files) {
+    const fileList = document.getElementById('fileList');
+    fileList.innerHTML = '';
+
+    if (!files || files.length === 0) {
+        fileList.innerHTML = '<div class="list-group-item">No files in agent</div>';
+        return;
+    }
+
+    files.forEach(file => {
+        const item = document.createElement('div');
+        item.className = 'list-group-item d-flex justify-content-between align-items-center';
+        item.innerHTML = `
+            <span>${file}</span>
+            <div class="btn-group">
+                <button class="btn btn-danger btn-sm" onclick="deleteAgentFile('${file}')">
+                    <i class="bi bi-trash"></i> Delete
+                </button>
+            </div>
+        `;
+        fileList.appendChild(item);
+    });
+}
+
+function refreshAgentFiles() {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            type: 'command',
+            command: 'list_files'
+        }));
+    }
+}
+
+function deleteAgentFile(fileName) {
+    if (!confirm(`Are you sure you want to delete ${fileName} from the agent?`)) {
+        return;
+    }
+    
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            type: 'command',
+            command: 'delete_file',
+            filename: fileName
+        }));
+        // Refrescar la lista después de un breve delay
+        setTimeout(refreshAgentFiles, 500);
+    }
+}
+
+// Conectar al WebSocket cuando se carga la página
+document.addEventListener('DOMContentLoaded', () => {
+    connectWebSocket();
+    // Refrescar la lista cada 10 segundos
+    setInterval(refreshAgentFiles, 10000);
+});
+</script>
+{% endblock %}

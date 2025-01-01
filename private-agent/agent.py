@@ -1,221 +1,236 @@
 import os
-import requests
-import asyncio
 import json
+import base64
+import asyncio
 import logging
 import websockets
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 
-# --- Cargar Variables desde .env ---
-load_dotenv()  # Carga las variables desde el archivo .env
-
-# --- Configuración General ---
-SERVER_URL = os.getenv("SERVER_URL", "http://localhost:8000")
-WS_SERVER_URL = os.getenv("WS_SERVER_URL", "ws://localhost:8000/ws")
-API_KEY = os.getenv("API_KEY", "your-secret-api-key")
-
-# --- Configuración de Logging ---
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+# Configurar logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-logger.info(f"SERVER_URL: {SERVER_URL}")
-logger.info(f"WS_SERVER_URL: {WS_SERVER_URL}")
-logger.info(f"API_KEY: {API_KEY}")
+# Cargar variables de entorno
+load_dotenv()
 
-class DownloadAgent:
-    def __init__(self):
-        self.ws = None
-        self.connected = False
-        self.download_queue = asyncio.Queue()
-        self.session = requests.Session()  # Usar una sesión para mantener las cookies
+# Configuración
+WEBSOCKET_URL = os.getenv("WEBSOCKET_URL", "ws://localhost:8000")
+FILES_DIR = os.path.join(os.path.dirname(__file__), "files")
 
-    # --- Conexión WebSocket ---
-    async def connect(self):
-        while True:
-            try:
-                # Primero obtener el token
-                logger.info("🔑 Obteniendo token de autenticación...")
-                response = self.session.post(
-                    f"{SERVER_URL}/token",
-                    data={
-                        "username": "admin@example.com",
-                        "password": "admin123"
-                    }
-                )
-                
-                if response.status_code != 200:
-                    logger.error(f"❌ Error al obtener token: {response.status_code}")
-                    logger.error(f"Response: {response.text}")
-                    await asyncio.sleep(5)
-                    continue
+# Crear directorio de archivos si no existe
+os.makedirs(FILES_DIR, exist_ok=True)
 
-                # Verificar que tenemos la cookie
-                cookies = self.session.cookies
-                logger.info(f"🍪 Cookies recibidas: {[f'{c.name}={c.value}' for c in cookies]}")
-                
-                if "access_token" not in self.session.cookies:
-                    logger.error("❌ No se encontró el token en las cookies")
-                    await asyncio.sleep(5)
-                    continue
-                
-                # Obtener el token y limpiarlo de comillas extra
-                token_cookie = next((c for c in cookies if c.name == "access_token"), None)
-                if token_cookie:
-                    token_value = token_cookie.value.strip('"')  # Eliminar comillas
-                    logger.info(f"🔑 Token limpio: {token_value[:50]}...")
-                    
-                    # Construir el header de cookies manualmente
-                    cookie_header = f"access_token={token_value}"
-                    logger.info(f"🔒 Cookie header: {cookie_header}")
-                    
-                    # Conectar al WebSocket con el token
-                    logger.info(f"🌐 Intentando conectar a {WS_SERVER_URL}")
-                    headers = {"Cookie": cookie_header}
-                    logger.info(f"📨 Headers de conexión: {headers}")
-                    
-                    async with websockets.connect(WS_SERVER_URL, extra_headers=headers) as websocket:
-                        self.ws = websocket
-                        self.connected = True
-                        logger.info("✅ Conexión WebSocket establecida con el servidor.")
-                        await self.handle_messages()
-                else:
-                    logger.error("❌ No se pudo obtener el token de las cookies")
-                    await asyncio.sleep(5)
-            except Exception as e:
-                logger.error(f"❌ Error en la conexión WebSocket: {str(e)}")
-                self.connected = False
-                await asyncio.sleep(5)  # Reintento tras 5 segundos
-
-    # --- Manejar Mensajes WebSocket ---
-    async def handle_messages(self):
-        try:
-            while True:
-                message = await self.ws.recv()
-                data = json.loads(message)
-                logger.info(f"📥 Mensaje recibido: {data}")
-                
-                if data.get("type") == "download":
-                    file_name = data.get("file")
-                    if file_name:
-                        await self.download_file(file_name)
-                    else:
-                        logger.error("❌ Comando de descarga sin 'file' especificado.")
-        except Exception as e:
-            logger.error(f"❌ Error manejando mensajes WebSocket: {str(e)}")
-            self.connected = False
-            await asyncio.sleep(5)
-
-    # --- Descargar Archivo ---
-    async def download_file(self, file_name: str):
-        try:
-            logger.info(f"⬇️ Iniciando descarga de {file_name} desde el servidor...")
-            
-            # Usar la sesión existente que ya tiene las cookies
-            response = self.session.get(
-                f"{SERVER_URL}/secure-file/{file_name}",
-                headers={"X-API-Key": API_KEY},
-                stream=True
-            )
-            
-            if response.status_code == 200:
-                # Usar ruta absoluta para evitar problemas de permisos
-                files_dir = os.path.abspath("files")
-                os.makedirs(files_dir, exist_ok=True)  # Asegurar que la carpeta exista
-                
-                file_path = os.path.join(files_dir, file_name)
-                with open(file_path, "wb") as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        if chunk:
-                            f.write(chunk)
-                
-                logger.info(f"✅ Archivo descargado correctamente: {file_name}")
-                
-                # Notificar al servidor que la descarga fue exitosa
-                await self.ws.send(json.dumps({
-                    "type": "download_complete",
-                    "file": file_name
-                }))
-                logger.info(f"📤 Notificación de descarga enviada para: {file_name}")
-            else:
-                logger.error(f"❌ Error al descargar {file_name}: {response.status_code}")
-                await self.ws.send(json.dumps({
-                    "type": "download_failed",
-                    "file": file_name,
-                    "error": f"HTTP {response.status_code}"
-                }))
-        except Exception as e:
-            logger.error(f"❌ Error durante la descarga de {file_name}: {str(e)}")
-            if self.ws:
-                await self.ws.send(json.dumps({
-                    "type": "download_failed",
-                    "file": file_name,
-                    "error": str(e)
-                }))
-
-    # --- Listar Archivos Locales ---
-    async def list_files(self):
-        try:
-            files_dir = os.path.abspath("files")
-            os.makedirs(files_dir, exist_ok=True)
-            files = [f for f in os.listdir(files_dir) if os.path.isfile(os.path.join(files_dir, f))]
-            return {"files": files}
-        except Exception as e:
-            logger.error(f"❌ Error al listar archivos locales: {str(e)}")
-            return {"files": []}
-
-# --- Inicializar el Agente ---
-agent = DownloadAgent()
-
-# --- Iniciar la Aplicación FastAPI ---
-from fastapi import FastAPI, WebSocket, HTTPException
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from fastapi.requests import Request
-
+# FastAPI app
 app = FastAPI()
 
-# Montar archivos estáticos y templates
-app.mount("/static", StaticFiles(directory="static"), name="static")
-app.mount("/downloaded", StaticFiles(directory="files"), name="files")  # Cambiado de /files a /downloaded
+# Templates
 templates = Jinja2Templates(directory="templates")
 
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(agent.connect())
+class AgentWebSocket:
+    def __init__(self):
+        self.reconnect_delay = 5
+        self.max_retries = 5
+        self.is_connected = False
+        self.last_message = None
 
-@app.get("/")
+    async def connect(self):
+        """Establece la conexión WebSocket con el servidor"""
+        while True:
+            try:
+                logger.info(" Conectando al servidor WebSocket...")
+                async with websockets.connect(f"{WEBSOCKET_URL}/ws/agent") as websocket:
+                    self.is_connected = True
+                    logger.info(" Conexión WebSocket establecida")
+                    await self.handle_messages(websocket)
+                    
+            except websockets.exceptions.WebSocketException as e:
+                self.is_connected = False
+                logger.error(f" Error en la conexión: {str(e)}")
+            except Exception as e:
+                self.is_connected = False
+                logger.error(f" Error inesperado: {str(e)}")
+            
+            await asyncio.sleep(self.reconnect_delay)  # Esperar antes de reintentar
+
+    async def handle_messages(self, websocket):
+        try:
+            while True:
+                message = await websocket.recv()
+                data = json.loads(message)
+                
+                # No mostrar el contenido del archivo en los logs
+                log_data = data.copy() if isinstance(data, dict) else data
+                if isinstance(log_data, dict) and 'content' in log_data:
+                    log_data['content'] = '[CONTENT HIDDEN]'
+                
+                logger.info(f"📥 Mensaje recibido: {log_data}")
+                self.last_message = json.dumps(log_data, indent=2)
+                
+                # Procesar el mensaje según su tipo
+                if data.get("type") == "command":
+                    response = await self.handle_command(data)
+                    await websocket.send(json.dumps(response))
+                
+        except websockets.exceptions.ConnectionClosed:
+            self.is_connected = False
+            logger.info(" Conexión cerrada")
+        except Exception as e:
+            self.is_connected = False
+            logger.error(f" Error manejando mensajes: {str(e)}")
+
+    async def handle_command(self, data):
+        """Maneja los comandos recibidos del servidor"""
+        command = data.get("command")
+        
+        if command == "ping":
+            return {"type": "response", "status": "ok", "message": "pong"}
+            
+        elif command == "download":
+            try:
+                filename = data.get("filename")
+                content_b64 = data.get("content")
+                
+                if not filename or not content_b64:
+                    return {
+                        "type": "response",
+                        "status": "error",
+                        "message": "Missing filename or content"
+                    }
+                
+                # Decodificar y guardar el archivo
+                content = base64.b64decode(content_b64)
+                file_path = os.path.join(FILES_DIR, filename)
+                
+                with open(file_path, 'wb') as f:
+                    f.write(content)
+                
+                logger.info(f"✅ Archivo descargado: {filename}")
+                return {
+                    "type": "response",
+                    "status": "success",
+                    "message": f"File {filename} downloaded successfully"
+                }
+                
+            except Exception as e:
+                logger.error(f"❌ Error descargando archivo: {str(e)}")
+                return {
+                    "type": "response",
+                    "status": "error",
+                    "message": f"Error downloading file: {str(e)}"
+                }
+        
+        elif command == "list_files":
+            try:
+                files = os.listdir(FILES_DIR)
+                return {
+                    "type": "agent_files",
+                    "files": files
+                }
+            except Exception as e:
+                logger.error(f"❌ Error listando archivos: {str(e)}")
+                return {
+                    "type": "response",
+                    "status": "error",
+                    "message": f"Error listing files: {str(e)}"
+                }
+        
+        elif command == "delete_file":
+            try:
+                filename = data.get("filename")
+                if not filename:
+                    return {
+                        "type": "response",
+                        "status": "error",
+                        "message": "Missing filename"
+                    }
+                
+                file_path = os.path.join(FILES_DIR, filename)
+                if not os.path.exists(file_path):
+                    return {
+                        "type": "response",
+                        "status": "error",
+                        "message": "File not found"
+                    }
+                
+                os.remove(file_path)
+                logger.info(f"✅ Archivo eliminado: {filename}")
+                return {
+                    "type": "response",
+                    "status": "success",
+                    "message": f"File {filename} deleted successfully"
+                }
+                
+            except Exception as e:
+                logger.error(f"❌ Error eliminando archivo: {str(e)}")
+                return {
+                    "type": "response",
+                    "status": "error",
+                    "message": f"Error deleting file: {str(e)}"
+                }
+        
+        else:
+            return {"type": "response", "status": "error", "message": "Comando desconocido"}
+
+# Instancia global del WebSocket
+agent_ws = AgentWebSocket()
+
+@app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
+@app.get("/status")
+async def status():
+    return {
+        "websocket_connected": agent_ws.is_connected,
+        "last_message": agent_ws.last_message
+    }
+
 @app.get("/list-files")
 async def list_files():
-    files_dir = os.path.abspath("files")
-    if not os.path.exists(files_dir):
-        return {"files": []}
-    files = [f for f in os.listdir(files_dir) if os.path.isfile(os.path.join(files_dir, f))]
-    return {"files": files}
-
-@app.post("/download/{file_name}")
-async def download_file(file_name: str):
-    await agent.download_file(file_name)
-    return {"status": "Download started"}
-
-@app.delete("/files/{file_name}")  # Este endpoint ahora funcionará
-async def delete_file(file_name: str):
+    """Lista los archivos en el directorio de archivos"""
     try:
-        file_path = os.path.join("files", file_name)
-        if os.path.exists(file_path):
-            os.remove(file_path)
-            return {"status": "File deleted"}
-        return {"status": "File not found"}
+        files = os.listdir(FILES_DIR)
+        return {"files": files}
     except Exception as e:
-        return {"status": "Error", "detail": str(e)}
+        logger.error(f"Error listing files: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": "Error listing files"}
+        )
 
-# --- Ejecutar el Servidor ---
+@app.delete("/files/{filename}")
+async def delete_file(filename: str):
+    """Elimina un archivo del directorio de archivos"""
+    try:
+        file_path = os.path.join(FILES_DIR, filename)
+        if not os.path.exists(file_path):
+            return JSONResponse(
+                status_code=404,
+                content={"status": "error", "message": "File not found"}
+            )
+            
+        os.remove(file_path)
+        return {"status": "success", "message": "File deleted successfully"}
+    except Exception as e:
+        logger.error(f"Error deleting file {filename}: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": "Error deleting file"}
+        )
+
+async def start_websocket():
+    """Inicia la conexión WebSocket en segundo plano"""
+    await agent_ws.connect()
+
+@app.on_event("startup")
+async def startup_event():
+    """Se ejecuta cuando inicia la aplicación"""
+    asyncio.create_task(start_websocket())
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001, log_level="info")
+    uvicorn.run(app, host="0.0.0.0", port=8001)
