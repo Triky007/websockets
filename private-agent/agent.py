@@ -3,27 +3,30 @@ import json
 import base64
 import asyncio
 import logging
-import websockets
-from fastapi import FastAPI, Request, Response, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
-from dotenv import load_dotenv
 import httpx
 from datetime import datetime
+from fastapi import FastAPI, WebSocket, HTTPException, Request, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 import xml.etree.ElementTree as ET
+import websockets
 
-# Configurar logging
+# Configuración
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Configuración del servidor XMF
+XMF_SERVER = "http://localhost:5000"  # Ajusta esto según tu configuración
+
+# Directorio de archivos
+FILES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "files")
 
 # Cargar variables de entorno
 load_dotenv()
 
 # Configuración
 WEBSOCKET_URL = os.getenv("WEBSOCKET_URL", "ws://localhost:8000")
-FILES_DIR = os.path.join(os.path.dirname(__file__), "files")
-XMF_SERVER = "http://192.168.10.110:25000"
 
 # Crear directorio de archivos si no existe
 os.makedirs(FILES_DIR, exist_ok=True)
@@ -180,7 +183,13 @@ class AgentWebSocket:
             try:
                 # Hacer la petición al servidor XMF
                 async with httpx.AsyncClient() as client:
-                    response = await client.post('http://localhost:8001/api/getKnowDevices')
+                    response = await client.post(
+                        'http://localhost:8001/api/getKnowDevices',
+                        headers={
+                            "Content-Type": "application/vnd.cip4-jmf+xml",
+                            "Accept": "application/xml"
+                        }
+                    )
                     if response.status_code == 200:
                         return {
                             "type": "response",
@@ -189,13 +198,15 @@ class AgentWebSocket:
                             "data": response.text
                         }
                     else:
+                        logger.error(f"Error del servidor XMF: {response.status_code} - {response.text}")
                         return {
                             "type": "response",
                             "status": "error",
                             "command": command,
-                            "message": f"Error del servidor XMF: {response.status_code}"
+                            "message": f"Error del servidor XMF: {response.status_code} - {response.text}"
                         }
             except Exception as e:
+                logger.error(f"Error al conectar con el servidor XMF: {str(e)}")
                 return {
                     "type": "response",
                     "status": "error",
