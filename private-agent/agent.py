@@ -17,13 +17,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuración del servidor XMF
-XMF_SERVER = "http://localhost:5000"  # Ajusta esto según tu configuración
+XMF_SERVER = "http://192.168.10.110:25000"
 
 # Directorio de archivos
 FILES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "files")
-
-# Cargar variables de entorno
-load_dotenv()
 
 # Configuración
 WEBSOCKET_URL = os.getenv("WEBSOCKET_URL", "ws://localhost:8000")
